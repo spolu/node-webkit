@@ -22,6 +22,7 @@
 #define CONTENT_NW_SRC_API_BINDINGS_COMMON_H_
 
 #include "base/string_piece.h"
+#include "base/file_path.h"
 #include "v8/include/v8.h"
 
 namespace content {
@@ -34,36 +35,13 @@ content::RenderView* GetCurrentRenderView();
 // Get string from resource_id.
 base::StringPiece GetStringResource(int resource_id);
 
-namespace remote {
+// Similar to node's `require` function, save functions in `exports`.
+void RequireFromResource(v8::Handle<v8::Object> root,
+                         v8::Handle<v8::Object> gui,
+                         v8::Handle<v8::String> name,
+                         int resource_id);
 
-// Tell browser to allocate a new object.
-// function AllocateObject(id, name, options);
-v8::Handle<v8::Value> AllocateObject(int routing_id,
-                                     int object_id,
-                                     const std::string& type,
-                                     v8::Handle<v8::Value> options);
-
-// Tell browser to delete a object.
-// function DeallocateObject(id);
-v8::Handle<v8::Value> DeallocateObject(int routing_id,
-                                       int object_id);
-
-// Call method of an object in browser.
-// function CallObjectMethod(id, type, method, args);
-v8::Handle<v8::Value> CallObjectMethod(int routing_id,
-                                       int object_id,
-                                       const std::string& type,
-                                       const std::string& method,
-                                       v8::Handle<v8::Value> args);
-
-// Call method of an object in browser and return the result.
-// function CallObjectMethod(id, type, method, args);
-v8::Handle<v8::Value> CallObjectMethodSync(int routing_id,
-                                           int object_id,
-                                           const std::string& type,
-                                           const std::string& method,
-                                           v8::Handle<v8::Value> args);
-
-}  // namespace remote
+// Utility function for paths
+bool MakePathAbsolute(FilePath* file_path);
 
 #endif  // CONTENT_NW_SRC_API_BINDINGS_COMMON_H_

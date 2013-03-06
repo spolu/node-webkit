@@ -247,6 +247,8 @@ void ShellContentRendererClient::InstallNodeSymbols(
         "window.require = function(name) {"
         "  if (name == 'nw.gui')"
         "    return nwDispatcher.requireNwGui();"
+        "  if (name == 'nw.delegate')"
+        "    return nwDelegate.requireNwDelegate();"
         "  return global.require(name);"
         "};"
 

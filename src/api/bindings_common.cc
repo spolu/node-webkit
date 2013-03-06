@@ -20,21 +20,24 @@
 
 #include "content/nw/src/api/bindings_common.h"
 
+#include "base/file_path.h"
+#include "base/file_util.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "content/nw/src/api/api_messages.h"
 #include "content/public/renderer/render_view.h"
 #include "content/public/renderer/render_thread.h"
-#include "content/public/renderer/v8_value_converter.h"
 #include "third_party/WebKit/Source/WebKit/chromium/public/WebView.h"
 #include "third_party/WebKit/Source/WebKit/chromium/public/WebFrame.h"
+#include "content/public/renderer/v8_value_converter.h"
+#include "chrome/renderer/static_v8_external_string_resource.h"
 #include "ui/base/resource/resource_bundle.h"
 
+
 using content::RenderView;
-using content::RenderThread;
-using content::V8ValueConverter;
 using WebKit::WebFrame;
 using WebKit::WebView;
+using content::V8ValueConverter;
 
 RenderView* GetCurrentRenderView() {
   WebFrame* frame = WebFrame::frameForCurrentContext();
@@ -53,88 +56,49 @@ base::StringPiece GetStringResource(int resource_id) {
   return ResourceBundle::GetSharedInstance().GetRawDataResource(resource_id);
 }
 
-namespace remote {
-
-v8::Handle<v8::Value> AllocateObject(int routing_id,
-                                     int object_id,
-                                     const std::string& type,
-                                     v8::Handle<v8::Value> options) {
+v8::Handle<v8::String> WrapSource(v8::Handle<v8::String> source) {
   v8::HandleScope handle_scope;
-
-  scoped_ptr<V8ValueConverter> converter(V8ValueConverter::create());
-  converter->SetStripNullFromObjects(true);
-
-  scoped_ptr<base::Value> value_option(
-      converter->FromV8Value(options, v8::Context::GetCurrent()));
-  if (!value_option.get() ||
-      !value_option->IsType(base::Value::TYPE_DICTIONARY))
-    return v8::ThrowException(v8::Exception::Error(v8::String::New(
-        "Unable to convert 'option' passed to AllocateObject")));
-
-  DVLOG(1) << "remote::AllocateObject(routing_id=" << routing_id << ", object_id=" << object_id << ")";
-
-  RenderThread::Get()->Send(new ShellViewHostMsg_Allocate_Object(
-      routing_id,
-      object_id,
-      type,
-      *static_cast<base::DictionaryValue*>(value_option.get())));
-  return v8::Undefined();
+  v8::Handle<v8::String> left =
+      v8::String::New("(function(nw, exports) {");
+  v8::Handle<v8::String> right = v8::String::New("\n})");
+  return handle_scope.Close(
+      v8::String::Concat(left, v8::String::Concat(source, right)));
 }
 
-v8::Handle<v8::Value> DeallocateObject(int routing_id,
-                                       int object_id) {
-  RenderThread::Get()->Send(new ShellViewHostMsg_Deallocate_Object(
-      routing_id, object_id));
-  return v8::Undefined();
+// Similar to node's `require` function, save functions in `exports`.
+void RequireFromResource(v8::Handle<v8::Object> root,
+                         v8::Handle<v8::Object> gui,
+                         v8::Handle<v8::String> name,
+                         int resource_id) {
+  v8::HandleScope scope;
+
+  v8::Handle<v8::String> source = v8::String::NewExternal(
+      new StaticV8ExternalAsciiStringResource(
+          GetStringResource(resource_id)));
+  v8::Handle<v8::String> wrapped_source = WrapSource(source);
+
+  v8::Handle<v8::Script> script(v8::Script::New(wrapped_source, name));
+  v8::Handle<v8::Function> func = v8::Handle<v8::Function>::Cast(script->Run());
+  v8::Handle<v8::Value> args[] = { root, gui };
+  func->Call(root, 2, args);
 }
 
-v8::Handle<v8::Value> CallObjectMethod(int routing_id,
-                                       int object_id,
-                                       const std::string& type,
-                                       const std::string& method,
-                                       v8::Handle<v8::Value> args) {
-  scoped_ptr<V8ValueConverter> converter(V8ValueConverter::create());
+bool MakePathAbsolute(FilePath* file_path) {
+  DCHECK(file_path);
 
-  scoped_ptr<base::Value> value_args(
-      converter->FromV8Value(args, v8::Context::GetCurrent()));
-  if (!value_args.get() ||
-      !value_args->IsType(base::Value::TYPE_LIST))
-    return v8::ThrowException(v8::Exception::Error(v8::String::New(
-        "Unable to convert 'args' passed to CallObjectMethod")));
+  FilePath current_directory;
+  if (!file_util::GetCurrentDirectory(&current_directory))
+    return false;
 
-  RenderThread::Get()->Send(new ShellViewHostMsg_Call_Object_Method(
-      routing_id,
-      object_id,
-      type,
-      method,
-      *static_cast<base::ListValue*>(value_args.get())));
-  return v8::Undefined();
+  if (file_path->IsAbsolute())
+    return true;
+
+  if (current_directory.empty())
+    return file_util::AbsolutePath(file_path);
+
+  if (!current_directory.IsAbsolute())
+    return false;
+
+  *file_path = current_directory.Append(*file_path);
+  return true;
 }
-
-v8::Handle<v8::Value> CallObjectMethodSync(int routing_id,
-                                           int object_id,
-                                           const std::string& type,
-                                           const std::string& method,
-                                           v8::Handle<v8::Value> args) {
-  scoped_ptr<V8ValueConverter> converter(V8ValueConverter::create());
-
-  scoped_ptr<base::Value> value_args(
-      converter->FromV8Value(args, v8::Context::GetCurrent()));
-  if (!value_args.get() ||
-      !value_args->IsType(base::Value::TYPE_LIST))
-    return v8::ThrowException(v8::Exception::Error(v8::String::New(
-        "Unable to convert 'args' passed to CallObjectMethodSync")));
-
-  base::ListValue result;
-  RenderThread::Get()->Send(new ShellViewHostMsg_Call_Object_Method_Sync(
-      routing_id,
-      object_id,
-      type,
-      method,
-      *static_cast<base::ListValue*>(value_args.get()),
-      &result));
-  return converter->ToV8Value(&result, v8::Context::GetCurrent());
-}
-
-}  // namespace remote
-

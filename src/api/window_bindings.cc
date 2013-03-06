@@ -23,6 +23,7 @@
 #include "base/values.h"
 #include "content/common/child_thread.h"
 #include "content/nw/src/api/bindings_common.h"
+#include "content/nw/src/api/api_common.h"
 #include "content/renderer/render_view_impl.h"
 #include "grit/nw_resources.h"
 #include "third_party/WebKit/Source/WebKit/chromium/public/WebFrame.h"

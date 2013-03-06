@@ -23,6 +23,7 @@
 #include "base/file_util.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/nw/src/api/api_messages.h"
+#include "content/nw/src/api/delegate_bindings.h"
 #include "content/nw/src/api/dispatcher_bindings.h"
 #include "webkit/glue/webkit_glue.h"
 #include "webkit/support/gc_extension.h"
@@ -61,6 +62,7 @@ void ShellRenderProcessObserver::OnRenderProcessWillShutdown() {
 
 void ShellRenderProcessObserver::WebKitInitialized() {
   RenderThread::Get()->RegisterExtension(new api::DispatcherBindings());
+  RenderThread::Get()->RegisterExtension(new net::DelegateBindings());
   WebRuntimeFeatures::enableCSSRegions(true);
 }
 
